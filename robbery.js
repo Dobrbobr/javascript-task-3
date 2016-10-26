@@ -1,48 +1,14 @@
 'use strict';
-function example() {
-    var time = 90;
-    var gangSchedule = {
-        Danny: [
-            {from: 'ПН 12:00+5', to: 'ПН 17:00+5'},
-            {from: 'ВТ 13:00+5', to: 'ВТ 16:00+5'}
-        ],
-        Rusty: [
-            {from: 'ПН 11:30+5', to: 'ПН 16:30+5'},
-            {from: 'ВТ 13:00+5', to: 'ВТ 16:00+5'}
-        ],
-        Linus: [
-            {from: 'ПН 09:00+3', to: 'ПН 14:00+3'},
-            {from: 'ПН 21:00+3', to: 'ВТ 09:30+3'},
-            {from: 'СР 09:30+3', to: 'СР 15:00+3'}
-        ]
-    };
-    var bankWorkingHours = {
-        from: '10:00+5',
-        to: '18:00+5'
-    };
-    var bankWorking = getScheduleInMinutesForBank(bankWorkingHours);
-    var timestamps = [];
-    for (var name in gangSchedule) {
-        var transformedSchedule = getScheduleInMinutes(gangSchedule[name], bankWorking[0].timeZone);
-        timestamps = timestamps.concat(transformedSchedule);
-        timestamps = timestamps.sort(sortByStart);
-    }
-    timestamps = findFreeTime(timestamps);
-    timestamps = intersect(timestamps, bankWorking);// промежутки времени, когда можно действовать
-    if (timestamps.length === 0 ) console.log(false);
-    else {
-        var flag = isEnoughForRobbery(timestamps, time);
-        console.log(flag);
-    }
 
-}
 /**
  * Сделано задание на звездочку
  * Реализовано оба метода и tryLater
  */
 exports.isStar = false;
-var MinutesInDay = 1440;
-var Week = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+
+var MINUTES_IN_HOUR = 60;
+var MINUTES_IN_DAY = MINUTES_IN_HOUR * 24;
+var WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
 /**
  * @param {Object} schedule – Расписание Банды
@@ -55,11 +21,11 @@ var Week = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
 
 exports.getAppropriateMoment = function (schedule, duration, workingHours) {
-    console.info(schedule, duration, workingHours);
-    var bankWorkingInMinutes = getScheduleInMinutesForBank(bankWorkingHours);
-    var commonSchedule = getCommonSchedule(gangSchedule, bankWorkingInMinutes[0].timeZone);
-    var freeTimesIntervals = findFreeTime(commonSchedule);
-    var intervalsForRobbery = intersect(freeTimesIntervals, bankWorkingInMinutes);// промежутки времени, когда можно действовать
+    var bankSchedule = getScheduleInMinutesForBank(workingHours);
+    var commonSchedule = getCommonSchedule(schedule, bankSchedule[0].timeZone);
+    var freeTimeIntervals = findFreeTime(commonSchedule);
+    var robberyIntervals = intersect(freeTimeIntervals, bankSchedule);
+    var moment = getRobberyMomentTime(robberyIntervals, duration);
 
     return {
 
@@ -68,12 +34,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {Boolean}
          */
         exists: function () {
-            if (intervalsForRobbery.length === 0 ) {
-
-                return false;
-            }
-
-            return (isEnoughForRobbery(intervalsForRobbery, duration));
+            return moment !== null;
         },
 
         /**
@@ -84,7 +45,22 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {String}
          */
         format: function (template) {
-            return template;
+            if (!this.exists()) {
+                return '';
+            }
+
+            var formattedTime = getDateFromMinutes(moment.from);
+            if (formattedTime.hours < 10) {
+                formattedTime.hours = '0' + formattedTime.hours;
+            }
+            if (formattedTime.minutes < 10) {
+                formattedTime.minutes = '0' + formattedTime.minutes;
+            }
+
+
+            return template.replace('%HH', formattedTime.hours)
+                .replace('%MM', formattedTime.minutes)
+                .replace('%DD', formattedTime.day);
         },
 
         /**
@@ -98,123 +74,201 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     };
 };
 
-
-
-function getScheduleInMinutes(schedule, timeZona) {
+function getScheduleInMinutes(schedule, timeZone) {
     var newSchedule = [];
     for (var i = 0; i < schedule.length; i++) {
-        newSchedule.push({from: getMinutes(schedule[i].from, timeZona), to: getMinutes(schedule[i].to, timeZona)});
+        newSchedule.push({
+            from: getMinutes(schedule[i].from, timeZone),
+            to: getMinutes(schedule[i].to, timeZone)
+        });
     }
 
     return newSchedule;
 }
 
-function getMinutes(str, timeZona) {
-    var minute;
+function getMinutes(str, timeZone) {
     var separators = /[ :+]/;
     var data = str.split(separators);
-    var inMinutes= Number(data[1]) * 60 + Number(data[2]) + Number(timeZona - data[3]) * 60;
+    var timeInMinutes = Number(data[1]) * 60 + Number(data[2]) +
+        (Number(timeZone) - Number(data[3])) * 60;
 
-    return minute = MinutesInDay*Week[data[0]] + inMinutes;
+    return MINUTES_IN_DAY * WEEKDAYS.indexOf(data[0]) + timeInMinutes;
 }
 
 function getScheduleInMinutesForBank(workingHours) {
-    var dataFrom = workingHours.from.split(/[:+]/);
-    var dataTo = workingHours.to.split(/[:+]/);
-    var bankInMinutes = [];
-    var fromInM=Number(dataFrom[0]) * 60 + Number(dataFrom[1]);
-    var toInM=Number(dataTo[0]) * 60 + Number(dataTo[1]);
-    bankInMinutes.push({
-        from: fromInM,
-        to: toInM,
-        timeZone: dataFrom[2]
+    var from = workingHours.from.split(/[:+]/);
+    var to = workingHours.to.split(/[:+]/);
+
+    var schedule = [];
+    var minutesFrom = Number(from[0]) * 60 + Number(from[1]);
+    var minutesTo = Number(to[0]) * 60 + Number(to[1]);
+    schedule.push({
+        from: minutesFrom,
+        to: minutesTo,
+        timeZone: from[2]
     });
-    bankInMinutes.push({
-        from: FromInM + MinutesInDay,
-        to: toInM + MinutesInDay,
-        timeZone: dataFrom[2]
+    schedule.push({
+        from: minutesFrom + MINUTES_IN_DAY,
+        to: minutesTo + MINUTES_IN_DAY,
+        timeZone: from[2]
     });
-    bankInMinutes.push({
-        from: FromInM + MinutesInDay*2,
-        to: toInM + MinutesInDay*2,
-        timeZone: dataFrom[2]
+    schedule.push({
+        from: minutesFrom + MINUTES_IN_DAY * 2,
+        to: minutesTo + MINUTES_IN_DAY * 2,
+        timeZone: from[2]
     });
 
-    return bankInMinutes;
+    return schedule;
 }
 
 function findFreeTime(schedule) {
-    var obj = [];
-    obj.push({from: 0, to: schedule[0].from});
-    obj.push({from: schedule[0].to, to: MinutesInDay*3});
+    var freeTimeIntervals = [];
+
+    freeTimeIntervals.push({
+        from: 0,
+        to: schedule[0].from
+    });
+    freeTimeIntervals.push({
+        from: schedule[0].to,
+        to: MINUTES_IN_DAY * 3
+    });
+
     for (var i = 1; i < schedule.length; i++) {
-        var last = obj.length - 1;
-        var elem = obj[last];
+        var last = freeTimeIntervals.length - 1;
+        var elem = freeTimeIntervals[last];
+
         if (schedule[i].to <= elem.from) {
             continue;
         }
-        if ((schedule[i].from <= elem.from) && (elem.from < schedule[i].to)) { //пересекает
-            obj[last] = {from: schedule[i].to, to: MinutesInDay*3};
+
+        // Интервалы пересекаются
+        if ((schedule[i].from <= elem.from) && (elem.from < schedule[i].to)) {
+            freeTimeIntervals[last] = {
+                from: schedule[i].to,
+                to: MINUTES_IN_DAY * 3
+            };
             continue;
         }
-        if (schedule[i].from >= elem.from) {//лежит внутри
-            obj[last] = {from: elem.from, to: schedule[i].from};
-            obj.push({from: schedule[i].to, to: MinutesInDay*3});
+
+        // Один внутри другого
+        if (schedule[i].from >= elem.from) {
+            freeTimeIntervals[last] = {
+                from: elem.from,
+                to: schedule[i].from
+            };
+            freeTimeIntervals.push({
+                from: schedule[i].to,
+                to: MINUTES_IN_DAY * 3
+            });
         }
     }
-    return obj;
+
+    return freeTimeIntervals;
 }
 
 function getCommonSchedule(gangSchedule, timeZone) {
     var commonSchedule = [];
-    for (var name in gangSchedule) {
-        var scheduleInMinutes = getScheduleInMinutes(gangSchedule[name], timeZone);
-        commonSchedule = commonSchedule.concat(scheduleInMinutes)
-            .sort(sortByStart);
-    }
 
+    Object.keys(gangSchedule).forEach(function (name) {
+        var scheduleInMinutes = getScheduleInMinutes(gangSchedule[name], timeZone);
+
+        commonSchedule = commonSchedule.concat(scheduleInMinutes)
+            .sort(compare);
+    });
+
+    return commonSchedule;
 }
 
-function intersect(freeTime, bankTime) { //массив из интервалов
+function isIntersected(bankTime, freeTime) {
     var result = [];
-    for (var i in bankTime) {
-        for (var k in freeTime) {
-            if (((bankTime[i].from <= freeTime[k].to) && (freeTime[k].from <= bankTime[i].from)) && (freeTime[k].to <= bankTime[i].to))
-                result.push({from: bankTime[i].from, to: freeTime[k].to}); //пересекает справа
 
-            if ((bankTime[i].from <= freeTime[k].to) && (freeTime[k].to >= i.to))
-                result.push({from: bankTime[i].from, to: bankTime[i].to}); //внутри
+    // пересекает справа
+    if (((bankTime.from <= freeTime.to) && (freeTime.from <= bankTime.from)) &&
+        (freeTime.to <= bankTime.to)) {
+        result = {
+            from: bankTime.from,
+            to: freeTime.to
+        };
+    }
 
-            if ((bankTime[i].from <= freeTime[k].from) && ((freeTime[k].to >= bankTime[i].to) && (freeTime[k].from <= bankTime[i].to)))
-                result.push({from: freeTime[k].from, to: bankTime[i].to}); //пересекает слева
+    // один внутри другого
+    if ((bankTime.from <= freeTime.from) && (freeTime.to <= bankTime.to)) {
+        result = {
+            from: bankTime.from,
+            to: bankTime.to
+        };
+    }
 
-            if ((bankTime[i].from <= freeTime[k].from) && (freeTime[k].to <= bankTime[i].to))
-                result.push({from: freeTime[k].from, to: freeTime[k].to}); //содержит в себе
+    // пересекает слева
+    if ((bankTime.from <= freeTime.from) &&
+        ((freeTime.to >= bankTime.to) && (freeTime.from <= bankTime.to))) {
+        result = {
+            from: freeTime.from,
+            to: bankTime.to
+        };
+    }
+
+    // содержит в себе
+    if ((bankTime.from <= freeTime.from) && (freeTime.to <= bankTime.to)) {
+        result = {
+            from: freeTime.from,
+            to: freeTime.to
+        };
+    }
+
+    return result;
+}
+
+function intersect(freeTime, bankTime) {
+    var result = [];
+
+    for (var i = 0; i < bankTime.length; i++) {
+        for (var k = 0; k < freeTime.length; k++) {
+            result.push(isIntersected(bankTime[i], freeTime[k]));
         }
     }
 
     return result;
-
 }
 
-function isEnoughForRobbery(availableIntervals, time) {
-    for (var elem in availableIntervals) {
-        if (time <= (availableIntervals[elem].to - availableIntervals[elem].from)) {
-            return true;
+function isEnoughForRobbery(interval, duration) {
+    return interval.to - interval.from >= duration;
+}
+
+function getRobberyMomentTime(availableIntervals, duration) {
+    for (var i = 0; i < availableIntervals.length; i++) {
+
+        if (isEnoughForRobbery(availableIntervals[i], duration)) {
+            return availableIntervals[i];
         }
     }
-    return false;
 
+    return null;
 }
 
-function sortByStart(first, second) {
-    if (first.from - second.from < 0)
+function compare(first, second) {
+    if (first.from - second.from < 0) {
         return -1;
-    if (first.from - second.from > 0)
+    }
+
+    if (first.from - second.from > 0) {
         return 1;
+    }
 
     return 0;
 }
 
+function getDateFromMinutes(minutes) {
+    var dayNumber = Math.floor(minutes / MINUTES_IN_DAY);
+    var day = WEEKDAYS[dayNumber];
+    minutes = minutes - dayNumber * MINUTES_IN_DAY;
 
+    var hours = Math.floor(minutes / MINUTES_IN_HOUR);
+    minutes = minutes - hours * MINUTES_IN_HOUR;
 
+    return {
+        day: day,
+        hours: hours,
+        minutes: minutes
+    };
+}
