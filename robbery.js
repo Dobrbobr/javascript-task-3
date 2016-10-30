@@ -9,6 +9,7 @@ exports.isStar = false;
 var MINUTES_IN_HOUR = 60;
 var MINUTES_IN_DAY = MINUTES_IN_HOUR * 24;
 var WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
+var ROBBERY_DAYS_COUNT = 3;
 
 /**
  * @param {Object} schedule – Расписание Банды
@@ -50,13 +51,6 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
             }
 
             var formattedTime = getDateFromMinutes(moment.from);
-            if (formattedTime.hours < 10) {
-                formattedTime.hours = '0' + formattedTime.hours;
-            }
-            if (formattedTime.minutes < 10) {
-                formattedTime.minutes = '0' + formattedTime.minutes;
-            }
-
 
             return template.replace('%HH', formattedTime.hours)
                 .replace('%MM', formattedTime.minutes)
@@ -89,8 +83,8 @@ function getScheduleInMinutes(schedule, timeZone) {
 function getMinutes(str, timeZone) {
     var separators = /[ :+]/;
     var data = str.split(separators);
-    var timeInMinutes = Number(data[1]) * 60 + Number(data[2]) +
-        (Number(timeZone) - Number(data[3])) * 60;
+    var timeInMinutes = parseInt(data[1], 10) * MINUTES_IN_HOUR + parseInt(data[2], 10) +
+        (parseInt(timeZone, 10) - parseInt(data[3], 10)) * MINUTES_IN_HOUR;
 
     return MINUTES_IN_DAY * WEEKDAYS.indexOf(data[0]) + timeInMinutes;
 }
@@ -100,38 +94,35 @@ function getScheduleInMinutesForBank(workingHours) {
     var to = workingHours.to.split(/[:+]/);
 
     var schedule = [];
-    var minutesFrom = Number(from[0]) * 60 + Number(from[1]);
-    var minutesTo = Number(to[0]) * 60 + Number(to[1]);
-    schedule.push({
-        from: minutesFrom,
-        to: minutesTo,
-        timeZone: from[2]
-    });
-    schedule.push({
-        from: minutesFrom + MINUTES_IN_DAY,
-        to: minutesTo + MINUTES_IN_DAY,
-        timeZone: from[2]
-    });
-    schedule.push({
-        from: minutesFrom + MINUTES_IN_DAY * 2,
-        to: minutesTo + MINUTES_IN_DAY * 2,
-        timeZone: from[2]
-    });
+    var minutesFrom = parseInt(from[0], 10) * MINUTES_IN_HOUR + parseInt(from[1], 10);
+    var minutesTo = parseInt(to[0], 10) * MINUTES_IN_HOUR + parseInt(to[1], 10);
+    for (var i = 0; i < 3; i++) {
+        schedule.push({
+            from: minutesFrom + MINUTES_IN_DAY * i,
+            to: minutesTo + MINUTES_IN_DAY * i,
+            timeZone: from[2]
+        });
+    }
 
     return schedule;
 }
 
-function findFreeTime(schedule) {
-    var freeTimeIntervals = [];
-
-    freeTimeIntervals.push({
+function splitSchedule(schedule) {
+    var firstInterval = {
         from: 0,
         to: schedule[0].from
-    });
-    freeTimeIntervals.push({
+    };
+
+    var secondInterval = {
         from: schedule[0].to,
-        to: MINUTES_IN_DAY * 3
-    });
+        to: MINUTES_IN_DAY * ROBBERY_DAYS_COUNT
+    };
+
+    return [firstInterval, secondInterval];
+}
+
+function findFreeTime(schedule) {
+    var freeTimeIntervals = splitSchedule(schedule);
 
     for (var i = 1; i < schedule.length; i++) {
         var last = freeTimeIntervals.length - 1;
@@ -145,7 +136,7 @@ function findFreeTime(schedule) {
         if ((schedule[i].from <= elem.from) && (elem.from < schedule[i].to)) {
             freeTimeIntervals[last] = {
                 from: schedule[i].to,
-                to: MINUTES_IN_DAY * 3
+                to: MINUTES_IN_DAY * ROBBERY_DAYS_COUNT
             };
             continue;
         }
@@ -158,7 +149,7 @@ function findFreeTime(schedule) {
             };
             freeTimeIntervals.push({
                 from: schedule[i].to,
-                to: MINUTES_IN_DAY * 3
+                to: MINUTES_IN_DAY * ROBBERY_DAYS_COUNT
             });
         }
     }
@@ -172,9 +163,9 @@ function getCommonSchedule(gangSchedule, timeZone) {
     Object.keys(gangSchedule).forEach(function (name) {
         var scheduleInMinutes = getScheduleInMinutes(gangSchedule[name], timeZone);
 
-        commonSchedule = commonSchedule.concat(scheduleInMinutes)
-            .sort(compare);
+        commonSchedule = commonSchedule.concat(scheduleInMinutes);
     });
+    commonSchedule.sort(compare);
 
     return commonSchedule;
 }
@@ -247,15 +238,8 @@ function getRobberyMomentTime(availableIntervals, duration) {
 }
 
 function compare(first, second) {
-    if (first.from - second.from < 0) {
-        return -1;
-    }
 
-    if (first.from - second.from > 0) {
-        return 1;
-    }
-
-    return 0;
+    return Math.sign(first.from - second.from);
 }
 
 function getDateFromMinutes(minutes) {
@@ -268,7 +252,11 @@ function getDateFromMinutes(minutes) {
 
     return {
         day: day,
-        hours: hours,
-        minutes: minutes
+        hours: formatTime(hours),
+        minutes: formatTime(minutes)
     };
+}
+
+function formatTime(time) {
+    return time > 10 ? time : '0' + time;
 }
