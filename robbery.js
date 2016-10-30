@@ -258,5 +258,5 @@ function getDateFromMinutes(minutes) {
 }
 
 function formatTime(time) {
-    return time > 10 ? time : '0' + time;
+    return time >= 10 ? time : '0' + time;
 }
