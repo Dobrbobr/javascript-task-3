@@ -170,7 +170,7 @@ function getCommonSchedule(gangSchedule, timeZone) {
 }
 
 function intersectIntervals(bankTime, freeTime) {
-    var result = [];
+    var result = {};
 
     // пересекает справа
     if (((bankTime.from <= freeTime.to) && (freeTime.from <= bankTime.from)) &&
@@ -213,9 +213,10 @@ function intersect(freeTime, bankTime) {
     var result = [];
 
     bankTime.forEach(function (bankInterval) {
-        freeTime.forEach(function (freeTimeInterval) {
-            result.push(intersectIntervals(bankInterval, freeTimeInterval));
+        var intervals = freeTime.map(function (freeTimeInterval) {
+            return intersectIntervals(bankInterval, freeTimeInterval);
         });
+        result = result.concat(intervals);
     });
 
     return result;
