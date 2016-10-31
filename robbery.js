@@ -68,16 +68,11 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     };
 };
 
-function getScheduleInMinutes(schedule, timeZone) {
-    var newSchedule = [];
-    for (var i = 0; i < schedule.length; i++) {
-        newSchedule.push({
-            from: getMinutes(schedule[i].from, timeZone),
-            to: getMinutes(schedule[i].to, timeZone)
-        });
-    }
-
-    return newSchedule;
+function getIntervalInMinutes(interval, timeZone) {
+    return {
+        from: getMinutes(interval.from, timeZone),
+        to: getMinutes(interval.to, timeZone)
+    };
 }
 
 function getMinutes(str, timeZone) {
@@ -124,35 +119,37 @@ function splitSchedule(schedule) {
 function findFreeTime(schedule) {
     var freeTimeIntervals = splitSchedule(schedule);
 
-    for (var i = 1; i < schedule.length; i++) {
+    schedule.forEach(function (interval) {
         var last = freeTimeIntervals.length - 1;
         var elem = freeTimeIntervals[last];
 
-        if (schedule[i].to <= elem.from) {
-            continue;
+        if (interval.to <= elem.from) {
+
+            return;
         }
 
         // Интервалы пересекаются
-        if ((schedule[i].from <= elem.from) && (elem.from < schedule[i].to)) {
+        if ((interval.from <= elem.from) && (elem.from < interval.to)) {
             freeTimeIntervals[last] = {
-                from: schedule[i].to,
+                from: interval.to,
                 to: MINUTES_IN_DAY * ROBBERY_DAYS_COUNT
             };
-            continue;
+
+            return;
         }
 
         // Один внутри другого
-        if (schedule[i].from >= elem.from) {
+        if (interval.from >= elem.from) {
             freeTimeIntervals[last] = {
                 from: elem.from,
-                to: schedule[i].from
+                to: interval.from
             };
             freeTimeIntervals.push({
-                from: schedule[i].to,
+                from: interval.to,
                 to: MINUTES_IN_DAY * ROBBERY_DAYS_COUNT
             });
         }
-    }
+    });
 
     return freeTimeIntervals;
 }
@@ -161,16 +158,18 @@ function getCommonSchedule(gangSchedule, timeZone) {
     var commonSchedule = [];
 
     Object.keys(gangSchedule).forEach(function (name) {
-        var scheduleInMinutes = getScheduleInMinutes(gangSchedule[name], timeZone);
+        commonSchedule = commonSchedule.concat(gangSchedule[name]
+            .map(function (interval) {
 
-        commonSchedule = commonSchedule.concat(scheduleInMinutes);
+                return getIntervalInMinutes(interval, timeZone);
+            }));
     });
     commonSchedule.sort(compare);
 
     return commonSchedule;
 }
 
-function isIntersected(bankTime, freeTime) {
+function intersectIntervals(bankTime, freeTime) {
     var result = [];
 
     // пересекает справа
@@ -213,11 +212,11 @@ function isIntersected(bankTime, freeTime) {
 function intersect(freeTime, bankTime) {
     var result = [];
 
-    for (var i = 0; i < bankTime.length; i++) {
-        for (var k = 0; k < freeTime.length; k++) {
-            result.push(isIntersected(bankTime[i], freeTime[k]));
-        }
-    }
+    bankTime.forEach(function (bankInterval) {
+        freeTime.forEach(function (freeTimeInterval) {
+            result.push(intersectIntervals(bankInterval, freeTimeInterval));
+        });
+    });
 
     return result;
 }
@@ -238,7 +237,6 @@ function getRobberyMomentTime(availableIntervals, duration) {
 }
 
 function compare(first, second) {
-
     return Math.sign(first.from - second.from);
 }
 
