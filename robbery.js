@@ -160,7 +160,6 @@ function getCommonSchedule(gangSchedule, timeZone) {
     Object.keys(gangSchedule).forEach(function (name) {
         commonSchedule = commonSchedule.concat(gangSchedule[name]
             .map(function (interval) {
-
                 return getIntervalInMinutes(interval, timeZone);
             }));
     });
