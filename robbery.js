@@ -170,38 +170,14 @@ function getCommonSchedule(gangSchedule, timeZone) {
 
 function intersectIntervals(bankTime, freeTime) {
     var result = {};
-    var isRightIntersection = (freeTime.to <= bankTime.to) &&
-    ((bankTime.from <= freeTime.to) && (freeTime.from <= bankTime.from));
-    var isIncludedInBankTime = (bankTime.from <= freeTime.from) && (freeTime.to <= bankTime.to);
-    var isLeftIntersection = (bankTime.from <= freeTime.from) &&
-        ((freeTime.to >= bankTime.to) && (freeTime.from <= bankTime.to));
-    var isIncludedInFreeTime = (bankTime.from <= freeTime.from) && (freeTime.to <= bankTime.to);
+    var isBankStartAfter = freeTime.to < bankTime.from;
+    var isBankEndBefore = bankTime.to < freeTime.from;
 
-    if (isRightIntersection) {
+    // если есть пересечение
+    if (!(isBankStartAfter || isBankEndBefore)) {
         result = {
-            from: bankTime.from,
-            to: freeTime.to
-        };
-    }
-
-    if (isIncludedInBankTime) {
-        result = {
-            from: bankTime.from,
-            to: bankTime.to
-        };
-    }
-
-    if (isLeftIntersection) {
-        result = {
-            from: freeTime.from,
-            to: bankTime.to
-        };
-    }
-
-    if (isIncludedInFreeTime) {
-        result = {
-            from: freeTime.from,
-            to: freeTime.to
+            from: Math.max(bankTime.from, freeTime.from),
+            to: Math.min(bankTime.to, freeTime.to)
         };
     }
 
